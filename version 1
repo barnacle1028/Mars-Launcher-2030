@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mars Lander</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: linear-gradient(to bottom, #000 0%, #1a0505 100%);
+      font-family: 'Courier New', monospace;
+      color: white;
+    }
+
+    #gameCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+    }
+
+    #startScreen, #gameOverScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: linear-gradient(135deg, rgba(0,0,0,0.95) 0%, rgba(30,10,10,0.95) 100%);
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: white;
+    }
+
+    h1 {
+      font-size: 48px;
+      margin-bottom: 10px;
+      text-shadow: 0 0 20px rgba(255,100,0,0.5);
+    }
+
+    .instructions {
+      margin: 20px;
+      padding: 20px;
+      background: rgba(0,0,0,0.5);
+      border-radius: 10px;
+      max-width: 400px;
+      line-height: 1.6;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: auto auto;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .controls span:first-child {
+      color: #ff9944;
+      text-align: right;
+    }
+
+    button {
+      font-size: 20px;
+      padding: 12px 30px;
+      margin-top: 20px;
+      cursor: pointer;
+      background: linear-gradient(135deg, #ff6600, #cc3300);
+      color: white;
+      border: none;
+      border-radius: 5px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      transition: all 0.3s;
+      box-shadow: 0 4px 15px rgba(255,100,0,0.3);
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(255,100,0,0.5);
+    }
+
+    #hud {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 5;
+      font-size: 14px;
+      background: linear-gradient(135deg, rgba(0,0,0,0.7), rgba(30,10,10,0.7));
+      padding: 15px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,100,0,0.3);
+      min-width: 150px;
+    }
+
+    #hud div {
+      margin: 5px 0;
+    }
+
+    .hud-label {
+      color: #ff9944;
+      display: inline-block;
+      width: 80px;
+    }
+
+    .hud-value {
+      color: #fff;
+      font-weight: bold;
+    }
+
+    #thrustBar {
+      width: 120px;
+      height: 12px;
+      background: #333;
+      margin-top: 5px;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid #555;
+    }
+
+    #thrustFill {
+      height: 100%;
+      background: linear-gradient(90deg, #00ff00, #ffff00, #ff0000);
+      width: 100%;
+      transition: width 0.2s;
+    }
+
+    .warning {
+      color: #ff4444;
+      animation: blink 0.5s infinite;
+    }
+
+    @keyframes blink {
+      50% { opacity: 0.3; }
+    }
+
+    #gameOverScreen h2 {
+      color: #ff9944;
+      margin: 10px 0;
+    }
+
+    .final-score {
+      font-size: 36px;
+      color: #00ff00;
+      margin: 20px 0;
+    }
+
+    .difficulty-selector {
+      margin: 20px 0;
+    }
+
+    .difficulty-btn {
+      padding: 8px 20px;
+      margin: 0 5px;
+      font-size: 16px;
+      background: rgba(255,100,0,0.2);
+      border: 1px solid #ff6600;
+    }
+
+    .difficulty-btn.selected {
+      background: #ff6600;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+
+  <div id="startScreen">
+    <h1>🚀 Mars Lander 🚀</h1>
+    <div class="instructions">
+      <h3>Mission Briefing</h3>
+      <p>Land your spacecraft safely on the red planet's surface. Find the landing pad and touch down gently!</p>
+      <div class="controls">
+        <span>↑</span><span>Main Thruster</span>
+        <span>← →</span><span>Side Thrusters</span>
+      </div>
+      <p style="margin-top: 15px; color: #ff9944;">⚠️ Watch your fuel and landing speed!</p>
+    </div>
+    <div class="difficulty-selector">
+      <button class="difficulty-btn selected" data-diff="easy">Easy</button>
+      <button class="difficulty-btn" data-diff="normal">Normal</button>
+      <button class="difficulty-btn" data-diff="hard">Hard</button>
+    </div>
+    <button id="startButton">Launch Mission</button>
+    <div style="margin-top: 20px;">
+      <button id="musicToggle" style="padding: 8px 15px; font-size: 14px; background: rgba(255,100,0,0.3);">🎵 Music: ON</button>
+    </div>
+  </div>
+
+  <!-- Background Music - Replace the src with your MP3 URL -->
+  <audio id="bgMusic" loop preload="auto">
+    <!-- GitHub hosted music file -->
+    <source src="https://raw.githubusercontent.com/barnacle1028/Mars-Launcher-2030/main/Galactic%20Pixels.mp3" type="audio/mpeg">
+    
+    Your browser does not support the audio element.
+  </audio>
+
+  <div id="gameOverScreen" style="display: none;">
+    <h1>Game Over</h1>
+    <h2 id="gameOverMessage" style="font-style: italic;">Keep Practicing!</h2>
+    <div class="final-score">Final Score: <span id="finalScore">0</span></div>
+    
+    <div id="highScoreEntry" style="display: none; margin: 20px 0;">
+      <h3 style="color: #00ff00;">NEW HIGH SCORE!</h3>
+      <div style="display: flex; align-items: center; gap: 10px; justify-content: center;">
+        <label style="color: #ff9944;">Enter Initials:</label>
+        <input type="text" id="initialsInput" maxlength="3" style="width: 60px; padding: 5px; font-size: 20px; text-transform: uppercase; background: #222; color: white; border: 2px solid #ff6600; text-align: center;">
+        <button id="saveScoreBtn" style="padding: 8px 15px; font-size: 16px;">Save</button>
+      </div>
+    </div>
+    
+    <div id="highScoresList" style="margin: 20px 0;">
+      <h3 style="color: #ff9944; margin-bottom: 10px;">HIGH SCORES</h3>
+      <div id="scoresTable" style="font-family: 'Courier New'; font-size: 18px; line-height: 1.8;"></div>
+    </div>
+    
+    <button id="restartButton">Try Again</button>
+  </div>
+
+  <div id="hud">
+    <div><span class="hud-label">Level:</span> <span id="level" class="hud-value" style="color: #ff9944;">1</span></div>
+    <div><span class="hud-label">Fuel:</span> <span id="fuel" class="hud-value">100</span>%</div>
+    <div id="thrustBar"><div id="thrustFill"></div></div>
+    <div><span class="hud-label">Score:</span> <span id="score" class="hud-value">0</span></div>
+    <div><span class="hud-label">Speed:</span> <span id="speed" class="hud-value">0.0</span></div>
+    <div><span class="hud-label">Altitude:</span> <span id="altitude" class="hud-value">0</span>m</div>
+    <div><span class="hud-label">Lives:</span> <span id="lives" class="hud-value">🚀🚀🚀</span></div>
+    <div id="warningText" style="display: none;" class="warning">⚠️ LOW FUEL!</div>
+  </div>
+
+  <script>
+    // Initialize audio with local sound creation
+    let audioContext;
+    let thrustOscillator = null;
+    
+    function initAudio() {
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+    }
+    
+    function playThrustSound() {
+      if (!audioContext) return;
+      
+      if (!thrustOscillator) {
+        thrustOscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        thrustOscillator.type = 'sawtooth';
+        thrustOscillator.frequency.setValueAtTime(100, audioContext.currentTime);
+        
+        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+        
+        thrustOscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        thrustOscillator.start();
+      }
+    }
+    
+    function stopThrustSound() {
+      if (thrustOscillator) {
+        thrustOscillator.stop();
+        thrustOscillator = null;
+      }
+    }
+    
+    function playCrashSound() {
+      if (!audioContext) return;
+      
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.type = 'square';
+      oscillator.frequency.setValueAtTime(150, audioContext.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(40, audioContext.currentTime + 0.5);
+      
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.5);
+    }
+    
+    function playSuccessSound() {
+      if (!audioContext) return;
+      
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(523.25, audioContext.currentTime); // C5
+      oscillator.frequency.setValueAtTime(659.25, audioContext.currentTime + 0.1); // E5
+      oscillator.frequency.setValueAtTime(783.99, audioContext.currentTime + 0.2); // G5
+      
+      gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.3);
+    }
+
+    let gameRunning = false;
+    let difficulty = 'easy';
+    let stars = [];
+    let highScores = [];
+
+    // High score management
+    function loadHighScores() {
+      try {
+        const stored = localStorage.getItem('marsLanderHighScores');
+        if (stored) {
+          highScores = JSON.parse(stored);
+        } else {
+          // Initialize with some default scores
+          highScores = [
+            { initials: 'ACE', score: 1000, level: 10 },
+            { initials: 'PRO', score: 750, level: 8 },
+            { initials: 'FLY', score: 500, level: 5 },
+            { initials: 'JET', score: 250, level: 3 },
+            { initials: 'NEW', score: 100, level: 1 }
+          ];
+          saveHighScores();
+        }
+      } catch (e) {
+        // If localStorage fails, use in-memory scores
+        highScores = [
+          { initials: 'ACE', score: 1000, level: 10 },
+          { initials: 'PRO', score: 750, level: 8 },
+          { initials: 'FLY', score: 500, level: 5 },
+          { initials: 'JET', score: 250, level: 3 },
+          { initials: 'NEW', score: 100, level: 1 }
+        ];
+      }
+    }
+
+    function saveHighScores() {
+      try {
+        localStorage.setItem('marsLanderHighScores', JSON.stringify(highScores));
+      } catch (e) {
+        // localStorage not available, scores will be session-only
+      }
+    }
+
+    function isHighScore(score) {
+      return highScores.length < 5 || score > highScores[highScores.length - 1].score;
+    }
+
+    function addHighScore(initials, score, level) {
+      highScores.push({ initials: initials.toUpperCase(), score, level });
+      highScores.sort((a, b) => b.score - a.score);
+      highScores = highScores.slice(0, 5); // Keep only top 5
+      saveHighScores();
+    }
+
+    function displayHighScores() {
+      const scoresTable = document.getElementById('scoresTable');
+      scoresTable.innerHTML = highScores.map((score, index) => {
+        const rank = index + 1;
+        const medalEmoji = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '  ';
+        return `<div style="display: flex; justify-content: center; margin: 5px 0;">
+          <span style="width: 40px; text-align: right; color: #ff9944;">${medalEmoji}</span>
+          <span style="width: 60px; text-align: center; color: white;">${score.initials}</span>
+          <span style="width: 100px; text-align: right; color: #00ff00;">${score.score}</span>
+          <span style="width: 80px; text-align: right; color: #888;">Lvl ${score.level}</span>
+        </div>`;
+      }).join('');
+    }
+
+    // Load high scores on startup
+    loadHighScores();
+
+    const difficultySettings = {
+      easy: { gravity: 0.0025, fuel: 100, windStrength: 0, padWidth: 100 },
+      normal: { gravity: 0.0035, fuel: 80, windStrength: 0.0001, padWidth: 80 },
+      hard: { gravity: 0.0045, fuel: 60, windStrength: 0.0003, padWidth: 60 }
+    };
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+      
+      // Music control
+      const bgMusic = document.getElementById("bgMusic");
+      const musicToggle = document.getElementById("musicToggle");
+      let musicEnabled = true;
+      
+      // Try to play music when page loads (may require user interaction)
+      bgMusic.volume = 0.3; // Set to 30% volume
+      
+      // Auto-play music when user first interacts with the page
+      document.addEventListener('click', function startMusic() {
+        if (musicEnabled && bgMusic.paused) {
+          bgMusic.play().catch(e => console.log("Music autoplay prevented:", e));
+        }
+        document.removeEventListener('click', startMusic);
+      }, { once: true });
+      
+      musicToggle.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent triggering other click handlers
+        musicEnabled = !musicEnabled;
+        if (musicEnabled) {
+          bgMusic.play().catch(e => console.log("Music play failed:", e));
+          musicToggle.textContent = "🎵 Music: ON";
+        } else {
+          bgMusic.pause();
+          musicToggle.textContent = "🔇 Music: OFF";
+        }
+      });
+
+      // Difficulty selection
+      document.querySelectorAll('.difficulty-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          document.querySelectorAll('.difficulty-btn').forEach(b => b.classList.remove('selected'));
+          e.target.classList.add('selected');
+          difficulty = e.target.dataset.diff;
+        });
+      });
+
+      function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        generateStars();
+        if (gameRunning) {
+          generateTerrain();
+        }
+      }
+      window.addEventListener('resize', resizeCanvas);
+      resizeCanvas();
+
+      function generateStars() {
+        stars = [];
+        for (let i = 0; i < 100; i++) {
+          stars.push({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height * 0.7,
+            size: Math.random() * 2,
+            brightness: Math.random()
+          });
+        }
+      }
+
+      function drawStars() {
+        stars.forEach(star => {
+          ctx.fillStyle = `rgba(255, 255, 255, ${star.brightness})`;
+          ctx.fillRect(star.x, star.y, star.size, star.size);
+        });
+      }
+
+      const startButton = document.getElementById("startButton");
+      const restartButton = document.getElementById("restartButton");
+      const startScreen = document.getElementById("startScreen");
+      const gameOverScreen = document.getElementById("gameOverScreen");
+      const initialsInput = document.getElementById("initialsInput");
+      const saveScoreBtn = document.getElementById("saveScoreBtn");
+      const highScoreEntry = document.getElementById("highScoreEntry");
+
+      startButton.addEventListener("click", () => {
+        initAudio();
+        startGame();
+      });
+      
+      restartButton.addEventListener("click", () => {
+        // Restore music volume when returning to menu
+        const bgMusic = document.getElementById("bgMusic");
+        if (!bgMusic.paused) {
+          bgMusic.volume = 0.3;
+        }
+        
+        gameOverScreen.style.display = "none";
+        startScreen.style.display = "flex";
+      });
+
+      saveScoreBtn.addEventListener("click", () => {
+        const initials = initialsInput.value.trim();
+        if (initials.length > 0) {
+          addHighScore(initials, score, level);
+          displayHighScores();
+          highScoreEntry.style.display = "none";
+          initialsInput.value = "";
+        }
+      });
+
+      initialsInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+          saveScoreBtn.click();
+        }
+      });
+
+      const keys = {};
+      document.addEventListener("keydown", e => keys[e.key] = true);
+      document.addEventListener("keyup", e => keys[e.key] = false);
+
+      let terrain = [];
+      let pad = { x: 0, width: 80 };
+      let particles = [];
+
+      function generateTerrain() {
+        terrain = [];
+        const settings = difficultySettings[difficulty];
+        const step = canvas.width / 60;
+        let y = canvas.height * 0.75;
+        
+        // Terrain generation parameters based on difficulty
+        const terrainParams = {
+          easy: {
+            variation: 30,
+            smoothness: 0.5,
+            minHeight: canvas.height * 0.6,
+            maxHeight: canvas.height - 100,
+            features: []
+          },
+          normal: {
+            variation: 50,
+            smoothness: 0.4,
+            minHeight: canvas.height * 0.5,
+            maxHeight: canvas.height - 80,
+            features: ['valley', 'mountain']
+          },
+          hard: {
+            variation: 70,
+            smoothness: 0.3,
+            minHeight: canvas.height * 0.4,
+            maxHeight: canvas.height - 60,
+            features: ['valley', 'mountain', 'trench', 'peak']
+          }
+        };
+        
+        const params = terrainParams[difficulty];
+        let featureStart = null;
+        let featureType = null;
+        
+        for (let x = 0; x <= canvas.width; x += step) {
+          // Add terrain features for harder difficulties
+          if (params.features.length > 0 && Math.random() < 0.02 && !featureStart) {
+            featureStart = x;
+            featureType = params.features[Math.floor(Math.random() * params.features.length)];
+          }
+          
+          if (featureStart && x > featureStart && x < featureStart + canvas.width * 0.15) {
+            // Create specific terrain features
+            const featureProgress = (x - featureStart) / (canvas.width * 0.15);
+            
+            switch(featureType) {
+              case 'valley':
+                // Deep V-shaped valley
+                const valleyDepth = 150 * (difficulty === 'hard' ? 1.5 : 1);
+                y = params.minHeight + valleyDepth * Math.sin(featureProgress * Math.PI);
+                break;
+                
+              case 'mountain':
+                // Sharp peak
+                const peakHeight = 120 * (difficulty === 'hard' ? 1.5 : 1);
+                if (featureProgress < 0.5) {
+                  y -= peakHeight * 2 * featureProgress;
+                } else {
+                  y += peakHeight * 2 * (featureProgress - 0.5);
+                }
+                break;
+                
+              case 'trench':
+                // Narrow deep trench (hard mode only)
+                if (featureProgress < 0.2) {
+                  y += 200 * (featureProgress * 5);
+                } else if (featureProgress > 0.8) {
+                  y -= 200 * ((1 - featureProgress) * 5);
+                } else {
+                  y = params.maxHeight - 20;
+                }
+                break;
+                
+              case 'peak':
+                // Multiple jagged peaks (hard mode only)
+                y += Math.sin(featureProgress * Math.PI * 4) * 80;
+                y -= 60;
+                break;
+            }
+            
+            if (featureProgress >= 1) {
+              featureStart = null;
+              featureType = null;
+            }
+          } else {
+            // Normal terrain variation
+            const change = (Math.random() - params.smoothness) * params.variation;
+            y += change;
+            
+            // Add occasional cliffs in hard mode
+            if (difficulty === 'hard' && Math.random() < 0.01) {
+              y += (Math.random() - 0.5) * 100;
+            }
+          }
+          
+          // Keep within bounds
+          y = Math.max(params.minHeight, Math.min(params.maxHeight, y));
+          terrain.push({ x, y });
+        }
+        
+        // Find relatively flat area for landing pad
+        let flattest = 0;
+        let flatScore = Infinity;
+        
+        for (let i = 2; i < terrain.length - 4; i++) {
+          let variance = 0;
+          for (let j = 0; j < 3; j++) {
+            variance += Math.abs(terrain[i + j].y - terrain[i].y);
+          }
+          if (variance < flatScore) {
+            flatScore = variance;
+            flattest = i;
+          }
+        }
+        
+        // Place pad at flattest area
+        const padIndex = flattest;
+        pad.x = terrain[padIndex].x;
+        pad.width = settings.padWidth;
+        
+        const padPoints = Math.ceil(pad.width / step);
+        for (let i = 0; i < padPoints; i++) {
+          if (terrain[padIndex + i]) {
+            terrain[padIndex + i].y = terrain[padIndex].y;
+          }
+        }
+        pad.y = terrain[padIndex].y;
+      }
+
+      function drawTerrain() {
+        // Draw terrain fill
+        ctx.beginPath();
+        ctx.moveTo(terrain[0].x, terrain[0].y);
+        for (let point of terrain) {
+          ctx.lineTo(point.x, point.y);
+        }
+        ctx.lineTo(canvas.width, canvas.height);
+        ctx.lineTo(0, canvas.height);
+        ctx.closePath();
+        
+        const gradient = ctx.createLinearGradient(0, canvas.height * 0.5, 0, canvas.height);
+        gradient.addColorStop(0, '#662211');
+        gradient.addColorStop(1, '#331100');
+        ctx.fillStyle = gradient;
+        ctx.fill();
+
+        // Draw terrain outline
+        ctx.beginPath();
+        ctx.moveTo(terrain[0].x, terrain[0].y);
+        for (let point of terrain) {
+          ctx.lineTo(point.x, point.y);
+        }
+        ctx.strokeStyle = '#884422';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Draw landing pad
+        ctx.fillStyle = '#00ff00';
+        ctx.fillRect(pad.x, pad.y - 5, pad.width, 5);
+        
+        // Landing pad lights
+        ctx.fillStyle = '#ffff00';
+        ctx.fillRect(pad.x - 5, pad.y - 8, 5, 3);
+        ctx.fillRect(pad.x + pad.width, pad.y - 8, 5, 3);
+      }
+
+      let lander;
+      let fuel;
+      let score = 0;
+      let lives = 3;
+      let gravity;
+      let thrustPower = 0.06;
+      let crashed = false;
+      let crashFrame = 0;
+      let windX = 0;
+      let level = 1;
+      let levelDisplayTime = 0;
+
+      function createParticle(x, y, vx, vy, color, life) {
+        particles.push({ x, y, vx, vy, color, life, maxLife: life });
+      }
+
+      function updateParticles() {
+        particles = particles.filter(p => {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += gravity * 0.5;
+          p.life--;
+          return p.life > 0;
+        });
+      }
+
+      function drawParticles() {
+        particles.forEach(p => {
+          const alpha = p.life / p.maxLife;
+          ctx.fillStyle = p.color.replace('rgb', 'rgba').replace(')', `, ${alpha})`);
+          ctx.fillRect(p.x, p.y, 2, 2);
+        });
+      }
+
+      function resetLander() {
+        const settings = difficultySettings[difficulty];
+        lander = {
+          x: canvas.width / 2,
+          y: 50,
+          vx: (Math.random() - 0.5) * 0.5,
+          vy: 0,
+          angle: 0
+        };
+        fuel = settings.fuel;
+        gravity = settings.gravity;
+        windX = (Math.random() - 0.5) * settings.windStrength;
+        crashed = false;
+        crashFrame = 0;
+        particles = [];
+        levelDisplayTime = 120; // Show level for 2 seconds (60fps * 2)
+        updateHUD();
+      }
+
+      function updateHUD() {
+        document.getElementById("level").textContent = level;
+        document.getElementById("fuel").textContent = Math.floor(fuel);
+        document.getElementById("score").textContent = score;
+        
+        const speed = Math.sqrt(lander.vx * lander.vx + lander.vy * lander.vy);
+        document.getElementById("speed").textContent = (speed * 100).toFixed(1);
+        
+        const altitude = Math.max(0, pad.y - lander.y - 10);
+        document.getElementById("altitude").textContent = Math.floor(altitude);
+        
+        document.getElementById("lives").textContent = "🚀".repeat(lives);
+        
+        const fuelPercent = (fuel / difficultySettings[difficulty].fuel) * 100;
+        document.getElementById("thrustFill").style.width = `${fuelPercent}%`;
+        
+        const warningText = document.getElementById("warningText");
+        if (fuel < 20) {
+          warningText.style.display = "block";
+          warningText.textContent = fuel < 10 ? "⚠️ CRITICAL FUEL!" : "⚠️ LOW FUEL!";
+        } else {
+          warningText.style.display = "none";
+        }
+      }
+
+      function drawExplosion() {
+        ctx.save();
+        ctx.translate(lander.x, lander.y);
+        
+        for (let i = 0; i < 5; i++) {
+          const size = crashFrame * (3 + i);
+          const alpha = Math.max(0, 1 - crashFrame / 30);
+          ctx.fillStyle = `rgba(${255 - i * 30}, ${100 + i * 20}, 0, ${alpha * (1 - i * 0.15)})`;
+          ctx.beginPath();
+          ctx.arc(0, 0, size, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        
+        ctx.restore();
+        
+        if (crashFrame === 1) {
+          for (let i = 0; i < 20; i++) {
+            const angle = (Math.PI * 2 * i) / 20;
+            const speed = 2 + Math.random() * 3;
+            createParticle(
+              lander.x, lander.y,
+              Math.cos(angle) * speed,
+              Math.sin(angle) * speed - 2,
+              `rgb(${255}, ${100 + Math.random() * 100}, 0)`,
+              30 + Math.random() * 20
+            );
+          }
+        }
+        
+        crashFrame++;
+      }
+
+      function drawLander() {
+        if (crashed) {
+          drawExplosion();
+          return;
+        }
+
+        ctx.save();
+        ctx.translate(lander.x, lander.y);
+        ctx.rotate(lander.angle);
+        
+        // Main body
+        const gradient = ctx.createLinearGradient(-6, -10, 6, 10);
+        gradient.addColorStop(0, '#ffffff');
+        gradient.addColorStop(1, '#cccccc');
+        ctx.fillStyle = gradient;
+        
+        ctx.beginPath();
+        ctx.moveTo(0, -12);
+        ctx.lineTo(8, 10);
+        ctx.lineTo(4, 12);
+        ctx.lineTo(-4, 12);
+        ctx.lineTo(-8, 10);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        
+        // Window
+        ctx.fillStyle = '#0099ff';
+        ctx.beginPath();
+        ctx.arc(0, -3, 3, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Landing legs
+        ctx.strokeStyle = '#888';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-6, 10);
+        ctx.lineTo(-10, 16);
+        ctx.moveTo(6, 10);
+        ctx.lineTo(10, 16);
+        ctx.stroke();
+        
+        // Main thruster
+        if (keys["ArrowUp"] && fuel > 0) {
+          const flameSize = 8 + Math.random() * 4;
+          const gradient = ctx.createLinearGradient(0, 12, 0, 12 + flameSize);
+          gradient.addColorStop(0, 'rgba(255,255,0,0.8)');
+          gradient.addColorStop(0.5, 'rgba(255,150,0,0.6)');
+          gradient.addColorStop(1, 'rgba(255,0,0,0.2)');
+          ctx.fillStyle = gradient;
+          
+          ctx.beginPath();
+          ctx.moveTo(-3, 12);
+          ctx.lineTo(-5, 12 + flameSize);
+          ctx.lineTo(0, 12 + flameSize + 4);
+          ctx.lineTo(5, 12 + flameSize);
+          ctx.lineTo(3, 12);
+          ctx.closePath();
+          ctx.fill();
+          
+          // Thrust particles
+          if (Math.random() > 0.3) {
+            createParticle(
+              lander.x - Math.sin(lander.angle) * 15,
+              lander.y + Math.cos(lander.angle) * 15,
+              (Math.random() - 0.5) * 2 - Math.sin(lander.angle) * 2,
+              Math.cos(lander.angle) * 3 + Math.random() * 2,
+              `rgb(${255}, ${100 + Math.random() * 100}, 0)`,
+              15 + Math.random() * 10
+            );
+          }
+        }
+
+        // Side thrusters
+        if (keys["ArrowLeft"] && fuel > 0) {
+          ctx.fillStyle = 'rgba(255,150,0,0.8)';
+          ctx.beginPath();
+          ctx.moveTo(8, 0);
+          ctx.lineTo(16, -2);
+          ctx.lineTo(16, 2);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        if (keys["ArrowRight"] && fuel > 0) {
+          ctx.fillStyle = 'rgba(255,150,0,0.8)';
+          ctx.beginPath();
+          ctx.moveTo(-8, 0);
+          ctx.lineTo(-16, -2);
+          ctx.lineTo(-16, 2);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+
+      function startGame() {
+        // Fade out music when game starts
+        const bgMusic = document.getElementById("bgMusic");
+        if (!bgMusic.paused) {
+          bgMusic.volume = 0.1; // Lower volume during gameplay
+        }
+        
+        startScreen.style.display = "none";
+        gameOverScreen.style.display = "none";
+        score = 0;
+        lives = 3;
+        level = 1;
+        generateTerrain();
+        resetLander();
+        gameRunning = true;
+        requestAnimationFrame(gameLoop);
+      }
+
+      function checkTerrainCollision() {
+        for (let i = 1; i < terrain.length; i++) {
+          const p1 = terrain[i - 1];
+          const p2 = terrain[i];
+          if (lander.x >= p1.x && lander.x <= p2.x) {
+            const terrainY = p1.y + ((lander.x - p1.x) / (p2.x - p1.x)) * (p2.y - p1.y);
+            if (lander.y + 10 >= terrainY) return true;
+          }
+        }
+        return false;
+      }
+
+      function triggerCrash() {
+        if (!crashed) {
+          crashed = true;
+          playCrashSound();
+        }
+      }
+
+      function drawLevelDisplay() {
+        if (levelDisplayTime > 0) {
+          ctx.save();
+          const alpha = levelDisplayTime > 60 ? 1 : levelDisplayTime / 60;
+          ctx.fillStyle = `rgba(255, 153, 68, ${alpha})`;
+          ctx.font = 'bold 72px Courier New';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.shadowColor = 'rgba(255, 100, 0, 0.8)';
+          ctx.shadowBlur = 20;
+          ctx.fillText(`LEVEL ${level}`, canvas.width / 2, canvas.height / 2);
+          ctx.restore();
+          levelDisplayTime--;
+        }
+      }
+
+      function gameLoop() {
+        if (!gameRunning) return;
+        
+        // Clear and draw background
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        drawStars();
+        drawTerrain();
+        updateParticles();
+        drawParticles();
+        drawLevelDisplay();
+
+        if (crashed) {
+          drawLander();
+          if (crashFrame > 40) {
+            lives--;
+            if (lives <= 0) {
+              document.getElementById("finalScore").textContent = score;
+              
+              // Check if it's a high score
+              if (isHighScore(score)) {
+                document.getElementById("highScoreEntry").style.display = "block";
+                document.getElementById("initialsInput").focus();
+              } else {
+                document.getElementById("highScoreEntry").style.display = "none";
+              }
+              
+              // Display high scores
+              displayHighScores();
+              
+              // Funny game over messages
+              const gameOverMessages = [
+                "Well… it was a bold strategy.",
+                "NASA just unfollowed you.",
+                "Great launch! Shame about the landing.",
+                "You missed the moon. And Earth. And logic.",
+                "Turns out gravity still works!",
+                "Rockets go up... not explode-y down.",
+                "Elon is disappointed.",
+                "Houston, we have… no idea what that was.",
+                "At least the crater looks cool!",
+                "You landed like my WiFi signal—suddenly and badly."
+              ];
+              
+              if (score > 500) {
+                document.getElementById("gameOverMessage").textContent = "Excellent Landing Commander!";
+              } else if (score > 200) {
+                document.getElementById("gameOverMessage").textContent = "Good Mission!";
+              } else {
+                // Pick a random funny message for low scores
+                const randomMessage = gameOverMessages[Math.floor(Math.random() * gameOverMessages.length)];
+                document.getElementById("gameOverMessage").textContent = randomMessage;
+              }
+              
+              gameOverScreen.style.display = "flex";
+              gameRunning = false;
+              return;
+            }
+            resetLander();
+          }
+          requestAnimationFrame(gameLoop);
+          return;
+        }
+
+        // Physics
+        lander.vy += gravity;
+        lander.vx += windX;
+        
+        if (fuel > 0) {
+          if (keys["ArrowUp"]) {
+            lander.vy -= thrustPower;
+            fuel -= 0.5;
+          }
+          if (keys["ArrowLeft"]) {
+            lander.vx -= thrustPower / 2;
+            lander.angle = Math.max(-0.3, lander.angle - 0.05);
+            fuel -= 0.2;
+          }
+          if (keys["ArrowRight"]) {
+            lander.vx += thrustPower / 2;
+            lander.angle = Math.min(0.3, lander.angle + 0.05);
+            fuel -= 0.2;
+          }
+        }
+        
+        if (!keys["ArrowLeft"] && !keys["ArrowRight"]) {
+          lander.angle *= 0.95;
+        }
+
+        lander.x += lander.vx;
+        lander.y += lander.vy;
+        
+        // Wrap around screen edges
+        if (lander.x < 0) lander.x = canvas.width;
+        if (lander.x > canvas.width) lander.x = 0;
+
+        // Landing detection
+        const onPad = lander.x >= pad.x && lander.x <= pad.x + pad.width;
+        const hitTerrain = checkTerrainCollision();
+
+        if (lander.y >= pad.y - 12 && onPad) {
+          const safeVy = difficulty === 'easy' ? 0.5 : difficulty === 'normal' ? 0.4 : 0.3;
+          const safeVx = difficulty === 'easy' ? 0.4 : difficulty === 'normal' ? 0.3 : 0.2;
+          
+          if (Math.abs(lander.vy) < safeVy && Math.abs(lander.vx) < safeVx && Math.abs(lander.angle) < 0.2) {
+            const bonusMultiplier = difficulty === 'hard' ? 3 : difficulty === 'normal' ? 2 : 1;
+            const fuelBonus = Math.floor(fuel * bonusMultiplier);
+            const speedBonus = Math.floor((1 - Math.sqrt(lander.vx * lander.vx + lander.vy * lander.vy)) * 100);
+            score += 100 + fuelBonus + Math.max(0, speedBonus);
+            
+            // Success effects
+            playSuccessSound();
+            for (let i = 0; i < 10; i++) {
+              createParticle(
+                pad.x + Math.random() * pad.width,
+                pad.y,
+                (Math.random() - 0.5) * 3,
+                -Math.random() * 5,
+                `rgb(0, ${200 + Math.random() * 55}, 0)`,
+                30
+              );
+            }
+            
+            // Advance to next level
+            level++;
+            generateTerrain();
+            resetLander();
+          } else {
+            triggerCrash();
+          }
+        } else if (hitTerrain) {
+          triggerCrash();
+        }
+
+        drawLander();
+        updateHUD();
+
+        requestAnimationFrame(gameLoop);
+      }
+    });
+  </script>
+</body>
+</html>
