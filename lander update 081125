@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mars Lander</title>
+  <style>
+    html, body { margin:0; padding:0; overflow:hidden; background:linear-gradient(to bottom,#000,#1a0505); font-family:'Courier New',monospace; color:#fff; height:100vh; width:100vw; }
+    #gameCanvas { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); z-index:1; background:transparent; }
+    #startScreen, #gameOverScreen { position:absolute; inset:0; background:linear-gradient(135deg,rgba(0,0,0,.95),rgba(30,10,10,.95)); z-index:10; display:flex; flex-direction:column; justify-content:center; align-items:center; color:#fff; }
+    h1 { font-size:48px; margin-bottom:10px; text-shadow:0 0 20px rgba(255,100,0,.5); }
+    .instructions { margin:20px; padding:20px; background:rgba(0,0,0,.5); border-radius:10px; max-width:420px; line-height:1.6; }
+    .controls { display:grid; grid-template-columns:auto auto; gap:10px; margin-top:10px; }
+    .controls span:first-child { color:#ff9944; text-align:right; }
+    button { font-size:20px; padding:12px 30px; margin-top:20px; cursor:pointer; background:linear-gradient(135deg,#ff6600,#cc3300); color:#fff; border:none; border-radius:6px; text-transform:uppercase; letter-spacing:2px; transition:.3s; box-shadow:0 4px 15px rgba(255,100,0,.3); }
+    button:hover { transform:translateY(-2px); box-shadow:0 6px 20px rgba(255,100,0,.5); }
+    #hud { position:absolute; top:10px; right:10px; z-index:5; font-size:14px; background:linear-gradient(135deg,rgba(0,0,0,.7),rgba(30,10,10,.7)); padding:15px; border-radius:10px; border:1px solid rgba(255,100,0,.3); min-width:160px; }
+    #hud div { margin:5px 0; }
+    .hud-label { color:#ff9944; display:inline-block; width:84px; }
+    .hud-value { color:#fff; font-weight:bold; }
+    #thrustBar { width:120px; height:12px; background:#333; margin-top:5px; border-radius:6px; overflow:hidden; border:1px solid #555; }
+    #thrustFill { height:100%; background:linear-gradient(90deg,#00ff00,#ffff00,#ff0000); width:0%; transition:width .1s; }
+    .warning { color:#ff4444; animation:blink .5s infinite; }
+    @keyframes blink { 50% { opacity:.3; } }
+    #gameOverScreen h2 { color:#ff9944; margin:10px 0; }
+    .final-score { font-size:36px; color:#00ff00; margin:20px 0; }
+    .difficulty-selector { margin:20px 0; }
+    .difficulty-btn { padding:8px 20px; margin:0 5px; font-size:16px; background:rgba(255,100,0,.2); border:1px solid #ff6600; }
+    .difficulty-btn.selected { background:#ff6600; }
+    /* Quip banner */
+    #quipBanner { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); max-width:80vw; text-align:center; background:rgba(0,0,0,.82); border:1px solid rgba(255,153,68,.7); padding:16px 24px; border-radius:12px; z-index:12; font-size:30px; font-weight:900; line-height:1.25; letter-spacing:.3px; text-shadow:0 2px 12px rgba(255,153,68,.45); opacity:0; transition:opacity .25s ease; display:none; }
+    #quipBanner.show { opacity:1; }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+
+  <div id="startScreen">
+    <h1>🚀 Mars Lander 🚀</h1>
+    <div class="instructions">
+      <h3>Mission Briefing</h3>
+      <p>Land your spacecraft safely on the red planet's surface. Find the landing pad and touch down gently!</p>
+      <div class="controls">
+        <span>↑</span><span>Main Thruster</span>
+        <span>← →</span><span>Rotate</span>
+        <span>A / D</span><span>Side Thrusters</span>
+        <span>Esc</span><span>Pause</span>
+      </div>
+      <p style="margin-top:15px;color:#ff9944;">⚠️ Watch your fuel and landing speed!</p>
+    </div>
+    <div class="difficulty-selector">
+      <button class="difficulty-btn selected" data-diff="easy">Easy</button>
+      <button class="difficulty-btn" data-diff="normal">Normal</button>
+      <button class="difficulty-btn" data-diff="hard">Hard</button>
+    </div>
+    <button id="startButton">Launch Mission</button>
+    <div style="margin-top:20px;">
+      <button id="musicToggle" style="padding:8px 15px; font-size:14px; background:rgba(255,100,0,.3);">🎵 Music: ON</button>
+    </div>
+  </div>
+
+  <audio id="bgMusic" loop preload="auto">
+    <source src="https://raw.githubusercontent.com/barnacle1028/Mars-Launcher-2030/main/Galactic%20Pulse.mp3" type="audio/mpeg">
+    Your browser does not support the audio element.
+  </audio>
+
+  <div id="gameOverScreen" style="display:none;">
+    <h1>Game Over</h1>
+    <h2 id="gameOverMessage" style="font-style:italic;">Keep Practicing!</h2>
+    <div class="final-score">Final Score: <span id="finalScore">0</span></div>
+    <div id="highScoreEntry" style="display:none; margin:20px 0;">
+      <h3 style="color:#00ff00;">NEW HIGH SCORE!</h3>
+      <div style="display:flex; align-items:center; gap:10px; justify-content:center;">
+        <label style="color:#ff9944;">Enter Initials:</label>
+        <input type="text" id="initialsInput" maxlength="3" style="width:60px; padding:5px; font-size:20px; text-transform:uppercase; background:#222; color:#fff; border:2px solid #ff6600; text-align:center;">
+        <button id="saveScoreBtn" style="padding:8px 15px; font-size:16px;">Save</button>
+      </div>
+    </div>
+    <div id="highScoresList" style="margin:20px 0;">
+      <h3 style="color:#ff9944; margin-bottom:10px;">HIGH SCORES</h3>
+      <div id="scoresTable" style="font-family:'Courier New'; font-size:18px; line-height:1.8;"></div>
+    </div>
+    <button id="restartButton">Try Again</button>
+  </div>
+
+  <div id="hud">
+    <div><span class="hud-label">Level:</span> <span id="level" class="hud-value" style="color:#ff9944;">1</span></div>
+    <div><span class="hud-label">Fuel:</span> <span id="fuel" class="hud-value">100</span>%</div>
+    <div id="thrustBar"><div id="thrustFill"></div></div>
+    <div><span class="hud-label">Score:</span> <span id="score" class="hud-value">0</span></div>
+    <div><span class="hud-label">Speed:</span> <span id="speed" class="hud-value">0</span></div>
+    <div><span class="hud-label">Altitude:</span> <span id="altitude" class="hud-value">0</span>m</div>
+    <div><span class="hud-label">Lives:</span> <span id="lives" class="hud-value">🚀🚀🚀</span></div>
+    <div><span class="hud-label">Mode:</span> <span id="mode" class="hud-value">Day 🌞</span></div>
+    <div id="warningText" style="display:none;" class="warning">⚠️ LOW FUEL!</div>
+  </div>
+
+  <div id="quipBanner"></div>
+
+  <script>
+    // ===================== Audio =====================
+    let audioContext; let thrustOscillator=null;
+    function initAudio(){ if(!audioContext){ audioContext = new (window.AudioContext||window.webkitAudioContext)(); } }
+    function playThrustSound(){ if(!audioContext||thrustOscillator) return; thrustOscillator=audioContext.createOscillator(); const g=audioContext.createGain(); thrustOscillator.type='sawtooth'; thrustOscillator.frequency.setValueAtTime(110,audioContext.currentTime); g.gain.setValueAtTime(0.07,audioContext.currentTime); thrustOscillator.connect(g); g.connect(audioContext.destination); thrustOscillator.start(); }
+    function stopThrustSound(){ if(thrustOscillator){ try{thrustOscillator.stop();}catch(e){} thrustOscillator.disconnect(); thrustOscillator=null; } }
+    function playCrashSound(){ if(!audioContext) return; const o=audioContext.createOscillator(); const g=audioContext.createGain(); o.type='square'; o.frequency.setValueAtTime(150,audioContext.currentTime); o.frequency.exponentialRampToValueAtTime(40,audioContext.currentTime+0.5); g.gain.setValueAtTime(0.3,audioContext.currentTime); g.gain.exponentialRampToValueAtTime(0.01,audioContext.currentTime+0.5); o.connect(g); g.connect(audioContext.destination); o.start(audioContext.currentTime); o.stop(audioContext.currentTime+0.5); }
+    function playSuccessSound(){ if(!audioContext) return; const o=audioContext.createOscillator(); const g=audioContext.createGain(); o.type='sine'; o.frequency.setValueAtTime(523.25,audioContext.currentTime); o.frequency.setValueAtTime(659.25,audioContext.currentTime+0.1); o.frequency.setValueAtTime(783.99,audioContext.currentTime+0.2); g.gain.setValueAtTime(0.2,audioContext.currentTime); g.gain.exponentialRampToValueAtTime(0.01,audioContext.currentTime+0.3); o.connect(g); g.connect(audioContext.destination); o.start(audioContext.currentTime); o.stop(audioContext.currentTime+0.3); }
+
+    // ===================== Game State =====================
+    let gameRunning=false, paused=false, difficulty='easy';
+    let dpr=Math.max(1, window.devicePixelRatio||1);
+    const DIFF={
+      easy:{ g:18, fuel:130, thrust:130, side:60, rot:2.0, pads:1, padW:[110,150], landV:45 },
+      normal:{ g:24, fuel:110, thrust:130, side:60, rot:2.2, pads:1, padW:[90,130], landV:40 },
+      hard:{ g:30, fuel:100, thrust:130, side:55, rot:2.4, pads:1, padW:[70,110], landV:35 }
+    };
+
+    // High scores
+    let highScores=[]; function loadHighScores(){ try{ const s=localStorage.getItem('marsLanderHighScores'); highScores=s?JSON.parse(s):[{initials:'ACE',score:1000,level:10},{initials:'PRO',score:750,level:8},{initials:'FLY',score:500,level:5},{initials:'JET',score:250,level:3},{initials:'NEW',score:100,level:1}]; if(!s) saveHighScores(); }catch(e){ highScores=[{initials:'ACE',score:1000,level:10},{initials:'PRO',score:750,level:8},{initials:'FLY',score:500,level:5},{initials:'JET',score:250,level:3},{initials:'NEW',score:100,level:1}]; } }
+    function saveHighScores(){ try{ localStorage.setItem('marsLanderHighScores', JSON.stringify(highScores)); }catch(e){} }
+    function isHighScore(score){ return highScores.length<5 || score>highScores[highScores.length-1].score; }
+    function addHighScore(initials,score,level){ highScores.push({initials:initials.toUpperCase(),score,level}); highScores.sort((a,b)=>b.score-a.score); highScores=highScores.slice(0,5); saveHighScores(); }
+    function displayHighScores(){ const tbl=document.getElementById('scoresTable'); tbl.innerHTML=highScores.map((s,i)=>{const r=i+1; const m=r===1?'🥇':r===2?'🥈':r===3?'🥉':'  '; return `<div style="display:flex; justify-content:center; margin:5px 0;"><span style="width:40px; text-align:right; color:#ff9944;">${m}</span><span style="width:60px; text-align:center; color:#fff;">${s.initials}</span><span style="width:100px; text-align:right; color:#00ff00;">${s.score}</span><span style="width:80px; text-align:right; color:#888;">Lvl ${s.level}</span></div>`; }).join(''); }
+    loadHighScores();
+
+    // ====== Day/Night: toggle every 5 restarts ======
+    let gamesStarted=0; let isNight=false; let sunProgress=0; // 0 day, 1 night for gradients
+    function computeNight(n){ if(n<=0) return false; return (Math.floor((n-1)/5) % 2)===1; } // 1-5 day, 6-10 night, 11-15 day...
+    function loadDayNight(){ try{ gamesStarted=parseInt(localStorage.getItem('marsGamesStarted')||'0',10)||0; isNight=computeNight(gamesStarted); sunProgress=isNight?1:0; }catch(e){ gamesStarted=0; isNight=false; sunProgress=0; } }
+    loadDayNight();
+
+    // Landing Quips
+    let lastInitials=''; try{ lastInitials=(localStorage.getItem('marsLanderLastInitials')||'').toUpperCase(); }catch(e){}
+    const BASE_QUIPS=[
+      "That's one small step for a rocket, one giant leap for my property values on Mars.",
+      "Finally, a delivery address even more remote than rural Alaska.",
+      "Great, now we need to update all those 'Men are from Mars' jokes.",
+      "The ultimate work-from-home setup.",
+      "Somewhere, a flat-Earther is having a very bad day.",
+      "Mars just got its first bad neighbor.",
+      "I bet the Wi-Fi still doesn't reach the bathroom.",
+      "Congratulations on the solar system's most expensive Airbnb.",
+      "At least now we know where to send all those extended warranty calls."
+    ];
+    function pickQuip(){ const list=BASE_QUIPS.slice(); if(lastInitials.includes('TED')) list.push('The Red Planet just became the Ted Planet.'); return list[Math.floor(Math.random()*list.length)]; }
+    function showQuip(text, ms=2300){ const el=document.getElementById('quipBanner'); if(!el) return; el.textContent=text; el.style.display='block'; requestAnimationFrame(()=>el.classList.add('show')); setTimeout(()=>{ el.classList.remove('show'); el.style.display='none'; }, ms); }
+
+    // Lander sprite (programmatic)
+    let landerImgReady=false; const landerImg=new Image();
+    function createRocketSprite(){ const c=document.createElement('canvas'); c.width=40; c.height=60; const cx=c.getContext('2d'); cx.fillStyle='#e6e6e6'; cx.fillRect(12,15,16,35); cx.fillStyle='#ff4444'; cx.beginPath(); cx.moveTo(20,5); cx.lineTo(12,20); cx.lineTo(28,20); cx.closePath(); cx.fill(); cx.fillStyle='#cccccc'; cx.beginPath(); cx.moveTo(8,40); cx.lineTo(12,35); cx.lineTo(12,45); cx.closePath(); cx.fill(); cx.beginPath(); cx.moveTo(32,40); cx.lineTo(28,35); cx.lineTo(28,45); cx.closePath(); cx.fill(); cx.fillStyle='#333'; cx.fillRect(14,50,12,8); cx.fillStyle='#49f'; cx.beginPath(); cx.arc(20,25,4,0,Math.PI*2); cx.fill(); cx.fillStyle='#999'; for(let i=18;i<=44;i+=6){ cx.fillRect(13,i,2,2); cx.fillRect(25,i,2,2);} return c.toDataURL(); }
+    landerImg.onload=()=>{ landerImgReady=true; }; landerImg.src=createRocketSprite();
+
+    // Canvas
+    const canvas=document.getElementById('gameCanvas'); const ctx=canvas.getContext('2d');
+
+    // Background & Atmosphere
+    let mountains=[]; let bgTime=0; let nightClock=0; let wasNight=false; // moon rise timing
+    function buildMountains(){ const w=canvas.width/dpr, h=canvas.height/dpr; mountains=[]; const layers=[ {base:.48, amp:24, segments:18, color:'rgba(120,40,30,.35)', drift:4}, {base:.60, amp:42, segments:22, color:'rgba(150,55,40,.45)', drift:8}, {base:.70, amp:64, segments:26, color:'rgba(180,70,45,.55)', drift:14} ]; for(const L of layers){ const pts=[]; const step=w/(L.segments-1); let y=h*L.base; for(let i=0;i<L.segments;i++){ const x=i*step; y += (Math.random()-.5)*L.amp; y = Math.min(h*(L.base+.15), Math.max(h*(L.base-.12), y)); pts.push({x,y}); } for(let k=0;k<1;k++){ for(let i=1;i<pts.length-1;i++){ pts[i].y=(pts[i-1].y+pts[i].y+pts[i+1].y)/3; } } mountains.push({pts, color:L.color, drift:L.drift}); } }
+
+    function drawBackground(){ const w=canvas.width/dpr, h=canvas.height/dpr; const night=isNight; // darker night
+      const sky=ctx.createLinearGradient(0,0,0,h);
+      if(night){ sky.addColorStop(0,'#050306'); sky.addColorStop(.6,'#030203'); sky.addColorStop(1,'#000000'); }
+      else { sky.addColorStop(0,'#1a0c0c'); sky.addColorStop(.55,'#2b0e0e'); sky.addColorStop(1,'#180606'); }
+      ctx.fillStyle=sky; ctx.fillRect(0,0,w,h);
+      ctx.fillStyle = night ? 'rgba(100,40,25,.06)' : 'rgba(200,90,50,.08)'; ctx.fillRect(0,h*.55,w,h*.45);
+
+      // Sun (day only)
+      if(!night){ const sx=w*.18, sy=h*.22, sr=82; const g=ctx.createRadialGradient(sx,sy,0,sx,sy,sr); g.addColorStop(0,'rgba(255,170,80,.95)'); g.addColorStop(.6,'rgba(255,140,50,.55)'); g.addColorStop(1,'rgba(255,120,40,0)'); ctx.fillStyle=g; ctx.beginPath(); ctx.arc(sx,sy,sr,0,Math.PI*2); ctx.fill(); }
+
+      // Twin moons (night)
+      if(night){ if(!wasNight){ nightClock=0; wasNight=true; } const t=Math.min(nightClock/30,1); const ease=t*t*(3-2*t); const m1x=w*0.68, m1y=h*(0.75 - 0.45*ease), r1=26; const g1=ctx.createRadialGradient(m1x,m1y,0,m1x,m1y,r1); g1.addColorStop(0,'rgba(235,235,245,.95)'); g1.addColorStop(.6,'rgba(210,210,220,.8)'); g1.addColorStop(1,'rgba(210,210,220,0)'); ctx.fillStyle=g1; ctx.beginPath(); ctx.arc(m1x,m1y,r1,0,Math.PI*2); ctx.fill(); const m2x=w*0.82, m2y=h*(0.82 - 0.55*ease), r2=16; const g2=ctx.createRadialGradient(m2x,m2y,0,m2x,m2y,r2); g2.addColorStop(0,'rgba(225,225,235,.9)'); g2.addColorStop(.6,'rgba(200,200,210,.75)'); g2.addColorStop(1,'rgba(200,200,210,0)'); ctx.fillStyle=g2; ctx.beginPath(); ctx.arc(m2x,m2y,r2,0,Math.PI*2); ctx.fill(); ctx.fillStyle='rgba(150,150,160,.35)'; ctx.beginPath(); ctx.arc(m1x-6,m1y-3,3,0,Math.PI*2); ctx.arc(m1x+7,m1y+4,2.5,0,Math.PI*2); ctx.arc(m1x+2,m1y-9,2,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(m2x-3,m2y-2,2,0,Math.PI*2); ctx.arc(m2x+3,m2y+1.5,1.6,0,Math.PI*2); ctx.fill(); }
+      else { wasNight=false; }
+
+      // Parallax mountains
+      for(const L of mountains){ const offset=(bgTime*L.drift) % (w/(L.pts.length-1)); ctx.save(); if(night) ctx.globalAlpha=.62; ctx.translate(-offset,0); ctx.beginPath(); ctx.moveTo(L.pts[0].x,L.pts[0].y); for(let j=1;j<L.pts.length;j++) ctx.lineTo(L.pts[j].x,L.pts[j].y); ctx.lineTo(w,h); ctx.lineTo(0,h); ctx.closePath(); ctx.fillStyle=L.color; ctx.fill(); ctx.restore(); }
+    }
+
+    // Dust Devils (single, larger)
+    let dustDevils=[]; let boulders=[]; let devilSpawnTimer=0;
+    function initDustDevils(){ dustDevils=[]; devilSpawnTimer=2+Math.random()*4; }
+    function spawnDustDevil(){ const w=canvas.width/dpr; const fromLeft=Math.random()<.5; const gx=fromLeft?0:w; const x=fromLeft?-60:w+60; const y=groundYAt(gx)-4; const height=200+Math.random()*160; const radius=30+Math.random()*18; const drift=(fromLeft?1:-1)*(12+Math.random()*14); const parts=[]; const n=44; for(let k=0;k<n;k++) parts.push({h:Math.random(), a:Math.random()*Math.PI*2}); dustDevils.push({x,y,height,radius,drift,parts,phase:Math.random()*Math.PI*2}); }
+    function updateDustDevils(dt){ const w=canvas.width/dpr; if(dustDevils.length===0){ devilSpawnTimer-=dt; if(devilSpawnTimer<=0){ spawnDustDevil(); devilSpawnTimer=8+Math.random()*8; } return; } const d=dustDevils[0]; d.x += d.drift*dt; const cx=Math.max(0,Math.min(w,d.x)); d.y = groundYAt(cx)-4; d.phase += dt*1.2; for(const p of d.parts){ p.h += dt*(.22+Math.random()*.05); if(p.h>1) p.h -= 1; p.a += dt*2.2; } if(d.x<-80 || d.x>w+80){ dustDevils=[]; } }
+    function drawDustDevils(){ if(!dustDevils.length) return; ctx.save(); for(const d of dustDevils){ for(const p of d.parts){ const swirl=Math.sin(p.a + p.h*6); const r=d.radius*(.5 + p.h*.9); const px=d.x + swirl*r; const py=d.y - p.h*d.height; ctx.globalAlpha=.2 + .3*(1-p.h); ctx.fillStyle='#c7845a'; ctx.beginPath(); ctx.arc(px,py,1.6 + (1-p.h)*1.6,0,Math.PI*2); ctx.fill(); } const grd=ctx.createRadialGradient(d.x,d.y,0,d.x,d.y,d.radius*2.2); grd.addColorStop(0,'rgba(180,100,70,.24)'); grd.addColorStop(1,'rgba(180,100,70,0)'); ctx.globalAlpha=1; ctx.fillStyle=grd; ctx.beginPath(); ctx.arc(d.x,d.y,d.radius*2.2,0,Math.PI*2); ctx.fill(); } ctx.restore(); }
+    function applyDustDevilForce(dt){ if(!dustDevils.length) return; const d=dustDevils[0]; const topY=d.y - d.height; const ny=Math.max(topY, Math.min(d.y, lander.y)); const dx=lander.x - d.x; const dy=lander.y - ny; const dist=Math.hypot(dx,dy); const influence=d.radius*5.5; if(dist<influence){ const PUSH_K=58; const scale=1 - dist/influence; const inv=dist>0 ? 1/dist : 0; const ax=dx*inv*PUSH_K*scale; const ay=dy*inv*PUSH_K*scale*0.65; lander.vx += ax*dt; lander.vy += ay*dt; } }
+
+    // Resize
+    function resize(){ const maxW=Math.min(window.innerWidth,1100); const maxH=Math.min(window.innerHeight,800); canvas.width=Math.floor(maxW*dpr); canvas.height=Math.floor(maxH*dpr); canvas.style.width=maxW+'px'; canvas.style.height=maxH+'px'; ctx.setTransform(dpr,0,0,dpr,0,0); buildMountains(); if(terrain.points.length) rebuildTerrainForNewSize(); draw(); }
+    window.addEventListener('resize', resize);
+
+    // Terrain
+    const terrain={ points:[], pads:[], baseline:0 };
+    function rebuildTerrainForNewSize(){ const w=canvas.width/dpr; if(!terrain.points.length) return; const minX=terrain.points[0].x; const maxX=terrain.points[terrain.points.length-1].x; const scaleX=w/(maxX-minX); terrain.points=terrain.points.map(p=>({x:(p.x-minX)*scaleX, y:p.y})); terrain.pads.forEach(p=>{ p.x *= scaleX; }); }
+    function generateTerrain(level){ const w=canvas.width/dpr, h=canvas.height/dpr; const amplitude=70 + level*10; const segments=28; const step=w/(segments-1); const baseY=h*.75; terrain.baseline=baseY; const pts=[]; let y=baseY + (Math.random()*40 - 20); for(let i=0;i<segments;i++){ const x=i*step; y += (Math.random()-.5)*amplitude; y=Math.min(h*.92, Math.max(h*.5, y)); pts.push({x,y}); } for(let k=0;k<2;k++){ for(let i=1;i<pts.length-1;i++){ pts[i].y=(pts[i-1].y+pts[i].y+pts[i+1].y)/3; } } const padCount=1; const [minW,maxW]=DIFF[difficulty].padW; const pads=[]; for(let p=0;p<padCount;p++){ const padW=Math.max(50, Math.random()*(maxW-minW) + minW - level*4); const idx=2 + Math.floor(Math.random()*(pts.length-4)); const x1=pts[idx].x; const yPad=pts[idx].y; const x2=Math.min(x1+padW, w-10); for(let i=0;i<pts.length;i++){ if(pts[i].x>=x1 && pts[i].x<=x2) pts[i].y=yPad; } pads.push({ x:x1, y:yPad, w:x2-x1, score:Math.round(300-(x2-x1))}); } pads.sort((a,b)=>a.x-b.x); terrain.points=pts; terrain.pads=pads; initDustDevils(); boulders=[]; const count=Math.max(3, Math.floor(w/260)); for(let i=0;i<count;i++){ const rx=Math.random()*w; const ry=groundYAt(rx)-3; boulders.push({x:rx,y:ry,r:3+Math.random()*4}); } }
+    function groundYAt(x){ const pts=terrain.points; if(!pts.length) return Infinity; for(let i=0;i<pts.length-1;i++){ const a=pts[i], b=pts[i+1]; if(x>=a.x && x<=b.x){ const t=(x-a.x)/(b.x-a.x); return a.y*(1-t) + b.y*t; } } return pts[pts.length-1].y; }
+
+    function drawTerrain(){ const w=canvas.width/dpr, h=canvas.height/dpr; const pts=terrain.points; if(!pts.length) return; const night=isNight; ctx.beginPath(); ctx.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x,pts[i].y); ctx.lineTo(w,h); ctx.lineTo(0,h); ctx.closePath(); const grd=ctx.createLinearGradient(0,terrain.baseline-120,0,h); if(night){ grd.addColorStop(0,'#120708'); grd.addColorStop(1,'#050304'); } else { grd.addColorStop(0,'#3a1512'); grd.addColorStop(1,'#1a0707'); } ctx.fillStyle=grd; ctx.fill(); ctx.beginPath(); ctx.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x,pts[i].y); ctx.strokeStyle=night?'rgba(255,150,90,.10)':'rgba(255,150,90,.32)'; ctx.lineWidth=1.8; ctx.stroke(); for(const p of terrain.pads){ ctx.fillStyle='#4a3a32'; ctx.fillRect(p.x,p.y-4,p.w,6); ctx.fillStyle='#ff9944'; ctx.fillRect(p.x,p.y-2,p.w,2); const phase=bgTime*4 + p.x*.02; const blink=.5 + .5*Math.sin(phase); const ly=p.y-3; const leftX=p.x, rightX=p.x+p.w; ctx.save(); ctx.globalAlpha=.6 + .4*blink; ctx.fillStyle=night?'#ffcf6a':'#ffe08a'; ctx.beginPath(); ctx.arc(leftX,ly,3,0,Math.PI*2); ctx.fill(); let glow=ctx.createRadialGradient(leftX,ly,0,leftX,ly,11); glow.addColorStop(0,'rgba(255,200,120,.75)'); glow.addColorStop(1,'rgba(255,200,120,0)'); ctx.fillStyle=glow; ctx.beginPath(); ctx.arc(leftX,ly,11,0,Math.PI*2); ctx.fill(); ctx.fillStyle=night?'#ffcf6a':'#ffe08a'; ctx.beginPath(); ctx.arc(rightX,ly,3,0,Math.PI*2); ctx.fill(); glow=ctx.createRadialGradient(rightX,ly,0,rightX,ly,11); glow.addColorStop(0,'rgba(255,200,120,.75)'); glow.addColorStop(1,'rgba(255,200,120,0)'); ctx.fillStyle=glow; ctx.beginPath(); ctx.arc(rightX,ly,11,0,Math.PI*2); ctx.fill(); ctx.restore(); } for(const b of boulders){ ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fillStyle='#6b3b2e'; ctx.fill(); ctx.beginPath(); ctx.arc(b.x-b.r*.3, b.y-b.r*.2, b.r*.5, 0, Math.PI*2); ctx.fillStyle='rgba(255,180,130,.25)'; ctx.fill(); } }
+
+    // Explosion FX
+    let explosion=null, respawnTimer=0, shakeMag=0, successTimer=0, advanceAfterSuccess=false; function spawnExplosion(x,y){ const count=42; explosion={particles:[], timer:1.0}; for(let i=0;i<count;i++){ const a=Math.random()*Math.PI*2; const s=80+Math.random()*180; explosion.particles.push({x,y, vx:Math.cos(a)*s, vy:Math.sin(a)*s-60, life:.8+Math.random()*.6}); } respawnTimer=1.1; shakeMag=14; }
+    function updateExplosion(dt){ if(!explosion) return; explosion.timer-=dt; for(const p of explosion.particles){ p.vy += 30*dt; p.x += p.vx*dt; p.y += p.vy*dt; p.life -= dt; } explosion.particles=explosion.particles.filter(p=>p.life>0); if(explosion.timer<=0 || explosion.particles.length===0) explosion=null; }
+    function drawExplosion(){ if(!explosion) return; ctx.save(); for(const p of explosion.particles){ const t=Math.max(0,Math.min(1,p.life)); ctx.globalAlpha=Math.min(1,t+.2); ctx.fillStyle=t>.5?'#ffbf3b':'#ff5122'; ctx.beginPath(); ctx.arc(p.x,p.y, 2+1.5*(1-t), 0, Math.PI*2); ctx.fill(); } ctx.restore(); }
+
+    // Lander & gameplay
+    const lander={ x:0, y:0, vx:0, vy:0, angle:0, fuel:100, width:32, height:48, alive:true, landed:false };
+    let level=1, score=0, lives=3;
+    let spinAccum=0, lastAngle=0; const SPIN_BONUS_PER_REV=150;
+    const keys={ up:false, left:false, right:false, sideL:false, sideR:false };
+    function resetLander(spawnTop=true){ const w=canvas.width/dpr, h=canvas.height/dpr; lander.x=w*(.15+Math.random()*.7); lander.y=spawnTop?60:Math.min(groundYAt(lander.x)-80, h*.25); lander.vx=(Math.random()-.5)*6; lander.vy=0; lander.angle=0; lander.fuel=DIFF[difficulty].fuel; lander.alive=true; lander.landed=false; spinAccum=0; lastAngle=lander.angle; }
+    function startLevel(){ generateTerrain(level); resetLander(true); updateHUD(true); }
+
+    // Input
+    window.addEventListener('keydown',e=>{ if(e.code==='ArrowUp') keys.up=true; if(e.code==='ArrowLeft') keys.left=true; if(e.code==='ArrowRight') keys.right=true; if(e.code==='KeyA') keys.sideL=true; if(e.code==='KeyD') keys.sideR=true; if(e.code==='Escape'){ if(gameRunning) togglePause(); } });
+    window.addEventListener('keyup',e=>{ if(e.code==='ArrowUp') keys.up=false; if(e.code==='ArrowLeft') keys.left=false; if(e.code==='ArrowRight') keys.right=false; if(e.code==='KeyA') keys.sideL=false; if(e.code==='KeyD') keys.sideR=false; });
+
+    // Loop
+    let lastTime=0; function loop(ts){ if(!gameRunning) return; requestAnimationFrame(loop); const dt=Math.min(.033, (ts-lastTime)/1000 || .016); lastTime=ts; if(paused){ draw(); return; } update(dt); draw(); }
+
+    function update(dt){ bgTime += dt; if(isNight) nightClock += dt; updateDustDevils(dt); const cfg=DIFF[difficulty];
+      if(respawnTimer>0){ respawnTimer -= dt; updateExplosion(dt); shakeMag=Math.max(0, shakeMag - 60*dt); if(respawnTimer<=0){ if(lives<=0){ gameOver(false); } else { resetLander(false); lander.alive=true; } } return; }
+      if(successTimer>0){ successTimer -= dt; if(successTimer<=0 && advanceAfterSuccess){ advanceAfterSuccess=false; level+=1; document.getElementById('level').textContent=level; startLevel(); } return; }
+      if(keys.left) lander.angle -= cfg.rot*dt; if(keys.right) lander.angle += cfg.rot*dt; { let dA=lander.angle-lastAngle; if(dA>Math.PI) dA -= Math.PI*2; if(dA<-Math.PI) dA += Math.PI*2; spinAccum += Math.abs(dA); lastAngle=lander.angle; }
+      let throttle=0; if(keys.up && lander.fuel>0){ throttle=1; const ax=Math.sin(lander.angle)*cfg.thrust; const ay=-Math.cos(lander.angle)*cfg.thrust; lander.vx += ax*dt; lander.vy += ay*dt; lander.fuel=Math.max(0, lander.fuel - 14*dt); playThrustSound(); } else { stopThrustSound(); }
+      if(lander.fuel>0){ if(keys.sideL){ lander.vx -= cfg.side*dt; lander.fuel=Math.max(0, lander.fuel - 8*dt); } if(keys.sideR){ lander.vx += cfg.side*dt; lander.fuel=Math.max(0, lander.fuel - 8*dt); } }
+      lander.vy += cfg.g*dt; applyDustDevilForce(dt); lander.x += lander.vx*dt; lander.y += lander.vy*dt; const w=canvas.width/dpr, h=canvas.height/dpr; if(lander.x<0) lander.x+=w; else if(lander.x>w) lander.x-=w; const gy=groundYAt(lander.x), footY=lander.y + lander.height*.5; if(footY>=gy){ const onPad=terrain.pads.find(p=> lander.x>=p.x && lander.x<=p.x+p.w ); const speed=Math.hypot(lander.vx,lander.vy); const upright=Math.abs(lander.angle)<0.2; const soft=speed<=DIFF[difficulty].landV; if(onPad && upright && soft){ handleLanding(onPad, speed); } else { handleCrash(); } }
+      document.getElementById('speed').textContent=Math.round(Math.hypot(lander.vx,lander.vy)); document.getElementById('fuel').textContent=Math.round(lander.fuel); document.getElementById('thrustFill').style.width=(throttle*100)+'%'; const alt=Math.max(0, Math.round(groundYAt(lander.x) - footY)); document.getElementById('altitude').textContent=alt; document.getElementById('warningText').style.display = lander.fuel<=15 ? 'block':'none'; }
+
+    function handleLanding(pad, speed){ playSuccessSound(); lander.landed=true; const precision=Math.max(100, 300-Math.round(pad.w)); const fuelBonus=Math.round(lander.fuel*2); const softness=Math.max(0, Math.round((DIFF[difficulty].landV - speed)*120)); const spinRevs=Math.floor(spinAccum/(Math.PI*2)); const spinBonus=spinRevs*SPIN_BONUS_PER_REV; const gained=100 + precision + fuelBonus + softness + Math.round(level*15) + spinBonus; score+=gained; document.getElementById('score').textContent=score; const quipText=pickQuip() + (spinRevs>0?`  (+${spinBonus} spin bonus for ${spinRevs} rev${spinRevs>1?'s':''})`:'' ); showQuip(quipText, 2200); lander.vx=0; lander.vy=0; successTimer=2.2; advanceAfterSuccess=true; }
+    function handleCrash(){ playCrashSound(); lives-=1; updateLivesHUD(); lander.alive=false; spawnExplosion(lander.x, lander.y); }
+    function updateLivesHUD(){ const icons=['','🚀','🚀🚀','🚀🚀🚀']; document.getElementById('lives').textContent=icons[Math.max(0,Math.min(3,lives))]; }
+
+    // Render
+    function drawLander(){ const night=isNight; ctx.save(); ctx.translate(lander.x,lander.y); ctx.rotate(lander.angle); if(landerImgReady){ ctx.drawImage(landerImg,-20,-30,40,60); } else { ctx.fillStyle='#ddd'; ctx.fillRect(-16,-20,32,40); }
+      // Main flame
+      if(keys.up && lander.fuel>0){ const flameLen = 10 + Math.random()*18; const nightBoost = night ? 1.3 : 1.0; ctx.beginPath(); ctx.moveTo(-8,30); ctx.lineTo(0,30+flameLen*nightBoost); ctx.lineTo(8,30); ctx.closePath(); ctx.fillStyle= night ? 'rgba(255,160,20,.95)' : 'rgba(255,140,0,.9)'; ctx.fill();
+        // Glow (stronger at night)
+        ctx.save(); ctx.globalCompositeOperation='lighter'; const gx=0, gy=32; const gr= ctx.createRadialGradient(gx,gy,0,gx,gy, night?26:16); gr.addColorStop(0, night? 'rgba(255,200,120,.9)' : 'rgba(255,200,120,.6)'); gr.addColorStop(1,'rgba(255,200,120,0)'); ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(gx,gy, night?26:16,0,Math.PI*2); ctx.fill(); ctx.restore(); }
+      // Side puffs
+      if(keys.sideL && lander.fuel>0){ ctx.beginPath(); ctx.moveTo(16,10); ctx.lineTo(24,10+Math.random()*8); ctx.lineTo(16,14); ctx.fillStyle= night ? 'rgba(255,150,20,.9)':'rgba(255,120,0,.8)'; ctx.fill(); }
+      if(keys.sideR && lander.fuel>0){ ctx.beginPath(); ctx.moveTo(-16,10); ctx.lineTo(-24,10+Math.random()*8); ctx.lineTo(-16,14); ctx.fillStyle= night ? 'rgba(255,150,20,.9)':'rgba(255,120,0,.8)'; ctx.fill(); }
+    ctx.restore(); }
+
+    function draw(){ const w=canvas.width/dpr, h=canvas.height/dpr; ctx.clearRect(0,0,w,h); ctx.save(); if(shakeMag>0) ctx.translate((Math.random()-.5)*shakeMag,(Math.random()-.5)*shakeMag); drawBackground(); drawTerrain(); drawDustDevils(); if(lander.alive) drawLander(); if(explosion) drawExplosion(); ctx.restore(); document.getElementById('mode').textContent = isNight ? 'Night 🌙' : 'Day 🌞'; }
+    function updateHUD(reset=false){ if(reset){ document.getElementById('level').textContent=level; document.getElementById('score').textContent=score; updateLivesHUD(); } document.getElementById('fuel').textContent=Math.round(lander.fuel); }
+
+    // UI / Screens
+    const startScreen=document.getElementById('startScreen'); const gameOverScreen=document.getElementById('gameOverScreen'); const startBtn=document.getElementById('startButton'); const restartBtn=document.getElementById('restartButton'); const diffBtns=[...document.querySelectorAll('.difficulty-btn')];
+    diffBtns.forEach(btn=>btn.addEventListener('click',()=>{ diffBtns.forEach(b=>b.classList.remove('selected')); btn.classList.add('selected'); difficulty=btn.dataset.diff; }));
+
+    function beginGame(){ initAudio(); const music=document.getElementById('bgMusic');
+      // ensure new source is used every time (and after our swap)
+      try{ music.pause(); }catch(e){}
+      try{ music.load(); }catch(e){}
+      music.playbackRate=0.7; music.currentTime=0; music.play().catch(()=>{});
+      // Increment launches, compute phase (every 5 restarts)
+      try{ gamesStarted=(parseInt(localStorage.getItem('marsGamesStarted')||'0',10)||0) + 1; localStorage.setItem('marsGamesStarted', String(gamesStarted)); }catch(e){ gamesStarted += 1; }
+      isNight = computeNight(gamesStarted); sunProgress = isNight ? 1 : 0; nightClock=0; document.getElementById('mode').textContent = isNight ? 'Night 🌙' : 'Day 🌞';
+
+      gameRunning=true; paused=false; level=1; score=0; lives=3;
+      generateTerrain(level); resetLander(true); updateHUD(true);
+      startScreen.style.display='none'; gameOverScreen.style.display='none';
+      lastTime=performance.now(); requestAnimationFrame(loop);
+    }
+    function togglePause(){ paused=!paused; if(!paused) lastTime=performance.now(); }
+    function gameOver(won){ gameRunning=false; stopThrustSound(); document.getElementById('finalScore').textContent=score; document.getElementById('gameOverMessage').textContent = won ? 'Mission Complete!' : 'Keep Practicing!'; const entry=document.getElementById('highScoreEntry'); entry.style.display = isHighScore(score) ? 'block' : 'none'; displayHighScores(); gameOverScreen.style.display='flex'; }
+
+    startBtn.addEventListener('click', beginGame); restartBtn.addEventListener('click', beginGame);
+    document.getElementById('saveScoreBtn').addEventListener('click', ()=>{ const initials=(document.getElementById('initialsInput').value||'YOU').slice(0,3); addHighScore(initials,score,level-1); try{ localStorage.setItem('marsLanderLastInitials', initials.toUpperCase()); lastInitials=initials.toUpperCase(); }catch(e){} document.getElementById('highScoreEntry').style.display='none'; displayHighScores(); });
+
+    // Music toggle
+    const musicToggle=document.getElementById('musicToggle'); const bgMusic=document.getElementById('bgMusic'); musicToggle.addEventListener('click', async()=>{ if(!audioContext) initAudio(); if(bgMusic.paused){ bgMusic.playbackRate=0.7; try{ await bgMusic.play(); }catch(e){} musicToggle.textContent='🎵 Music: ON'; } else { bgMusic.pause(); musicToggle.textContent='🎵 Music: OFF'; } });
+
+    // Boot
+    (function boot(){ const maxW=Math.min(window.innerWidth,1100); const maxH=Math.min(window.innerHeight,800); canvas.width=Math.floor(maxW*dpr); canvas.height=Math.floor(maxH*dpr); canvas.style.width=maxW+'px'; canvas.style.height=maxH+'px'; ctx.setTransform(dpr,0,0,dpr,0,0); buildMountains(); draw(); })();
+  </script>
+</body>
+</html>
